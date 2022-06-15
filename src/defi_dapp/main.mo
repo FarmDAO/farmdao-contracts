@@ -45,12 +45,18 @@ shared(init_msg) actor class farmLoan() = this {
 
     var loans = M.HashMap<Nat, T.Loan>(10, Nat.equal, Hash.hash);
 
+    public func clear() {
+        loans := M.HashMap<Nat, T.Loan>(10, Nat.equal, Hash.hash);
+        book.clear();
+        pool.clear();
+    };
+
     // ===== LOAN FUNCTIONS =====
-    public shared(msg) func addLoan(juniorAmount: Nat, seniorAmount: Nat) : async T.AddLoanReceipt {
+    public shared(msg) func addLoan(juniorAmount: Nat, seniorAmount: Nat, interest: Nat) : async T.AddLoanReceipt {
         let id = nextId();
         Debug.print("");
         let owner=msg.caller;
-        let submitted = Time.now();
+        let startTime = Time.now();
 
         let status = #initiated;
 
@@ -60,6 +66,8 @@ shared(init_msg) actor class farmLoan() = this {
             owner;
             juniorAmount;
             seniorAmount;
+            interest;
+            startTime;
          };
         loans.put(id, loan);
 
@@ -69,8 +77,8 @@ shared(init_msg) actor class farmLoan() = this {
     public shared(msg) func cancelLoan(loan_id: Nat) : async T.CancelLoanReceipt {
         Debug.print("Cancelling loan "# Nat.toText(loan_id) #"...");
         switch (loans.get(loan_id)) {
-            case (?order)
-                if(order.owner != msg.caller or order.status != #initiated) {
+            case (?loan)
+                if(loan.owner != msg.caller or loan.status != #initiated) {
                     return #Err(#NotAllowed);
                 } else {
                     //TODO: Return funds and set loan as canceled.
@@ -83,7 +91,7 @@ shared(init_msg) actor class farmLoan() = this {
     public func getLoan(loan_id: Nat) : async(?T.Loan) {
         Debug.print("Checking loan "# Nat.toText(loan_id) #"...");
         switch (loans.get(loan_id)) {
-            case (?order) return ?order;
+            case (?loan) return ?loan;
             case null {}
         };
         null;
@@ -109,6 +117,55 @@ shared(init_msg) actor class farmLoan() = this {
     };
 
     // ===== WITHDRAW FUNCTIONS =====
+    public shared(msg) func withdrawFund(loanId: Nat, address: Principal) : async T.WithdrawReceipt {
+        switch (loans.get(loanId)) {
+            case (?loan){
+                if(msg.caller != loan.owner and loan.status != #approved) {
+                    return #Err(#TransferFailure);
+                }
+                else{                    
+                    let account_id = Account.accountIdentifier(address, Account.defaultSubaccount());
+                    let amount = loan.juniorAmount + loan.seniorAmount;
+                    let withdrawreceipt =    await Ledger.transfer({
+                                                        memo: Nat64    = 0;
+                                                        from_subaccount = ?Account.defaultSubaccount();
+                                                        to = account_id;
+                                                        amount = { e8s = Nat64.fromNat(amount) };
+                                                        fee = { e8s = Nat64.fromNat(icp_fee) };
+                                                        created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+                                                    });
+
+
+                    switch withdrawreceipt {
+                        case (#Ok _) {
+                            let id = loan.id;
+                            let owner = loan.owner;
+                            let juniorAmount = loan.juniorAmount;
+                            let seniorAmount = loan.seniorAmount;
+                            let status = #raised;
+                            let interest = loan.interest;
+                            let startTime = Time.now();
+
+                            let updated_loan : T.Loan = {
+                                id;
+                                status;
+                                owner;
+                                juniorAmount;
+                                seniorAmount;
+                                interest;
+                                startTime;
+                            };
+                            loans.put(loanId, updated_loan);
+                            return #Ok(amount)
+                        };
+                        case _ {return #Err(#TransferFailure);};
+                    };
+                };
+            };
+            case null {return #Err(#TransferFailure);}
+        };
+    };
+
     public shared(msg) func withdraw(amount: Nat, address: Principal) : async T.WithdrawReceipt {
         let account_id = Account.accountIdentifier(address, Account.defaultSubaccount());
         await withdrawIcp(msg.caller, amount, account_id)
@@ -130,7 +187,7 @@ shared(init_msg) actor class farmLoan() = this {
             memo: Nat64    = 0;
             from_subaccount = ?Account.defaultSubaccount();
             to = account_id;
-            amount = { e8s = Nat64.fromNat(amount + icp_fee) };
+            amount = { e8s = Nat64.fromNat(amount) };
             fee = { e8s = Nat64.fromNat(icp_fee) };
             created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
         });
@@ -138,7 +195,7 @@ shared(init_msg) actor class farmLoan() = this {
         switch icp_reciept {
             case (#Err e) {
                 // add tokens back to user account balance
-                pool.depositFunds(caller,amount+icp_fee);
+                pool.depositFunds(caller,amount);
                 return #Err(#TransferFailure);
             };
             case _ {};
@@ -208,8 +265,74 @@ shared(init_msg) actor class farmLoan() = this {
 
     // ===== DEPOSIT FUNCTIONS =====
     // Return the account ID specific to this user's subaccount
+    public shared(msg) func getCanisterICPAddress(): async Blob {
+        Account.accountIdentifier(Principal.fromActor(this), Account.defaultSubaccount());
+    };
+
     public shared(msg) func getDepositAddress(): async Blob {
         Account.accountIdentifier(Principal.fromActor(this), Account.principalToSubaccount(msg.caller));
+    };
+
+    public func getLoanInterestAmount(loanId: Nat): async Nat {
+        switch (loans.get(loanId)) {
+            case (?loan){
+                let interest_amount =  getInterestAmount(loan);
+                return interest_amount;
+            };
+            
+            case null {return 0;}
+        };
+        
+    };
+    private func getInterestAmount(loan: T.Loan): Nat {
+        let interest_per_year = (loan.juniorAmount + loan.seniorAmount) * loan.interest;
+        let interest_per_nano = interest_per_year / 31557000000000000;
+        let interest_amount = Int.abs(Time.now() - loan.startTime) * interest_per_nano;
+        return interest_amount;
+    };
+    public shared(msg) func payInterest(loanId: Nat): async T.DepositReceipt {
+        // Debug.print("Depositing loan. LEDGER: " # Principal.toText(E.ledger()));
+        switch (loans.get(loanId)) {
+            case (?loan){
+                if(loan.status != #raised) {
+                    return #Err(#DepositError);
+                };
+
+                let caller = msg.caller;
+                let interest_amount = getInterestAmount(loan);
+                
+                let source_account = Account.accountIdentifier(Principal.fromActor(this), Account.principalToSubaccount(caller));
+                
+                // Check ledger for value
+                let balance = await Ledger.account_balance({ account = source_account });
+
+                Debug.print("Source Account : "# Principal.toText(caller) #" ... Balance : " # Nat64.toText(balance.e8s));
+                // Transfer to default subaccount
+                let icp_receipt = if (Nat64.toNat(balance.e8s) > (interest_amount + icp_fee )) {
+                    await Ledger.transfer({
+                        memo: Nat64    = 0;
+                        from_subaccount = ?Account.principalToSubaccount(caller);
+                        to = Account.accountIdentifier(Principal.fromActor(this), Account.defaultSubaccount());
+                        amount = { e8s = Nat64.fromNat(interest_amount) };
+                        fee = { e8s = Nat64.fromNat(icp_fee) };
+                        created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+                    })
+                } else {
+                    return #Err(#BalanceLow);
+                };
+
+                switch icp_receipt {
+                    case ( #Err _) {
+                        return #Err(#TransferFailure);
+                    };
+                    case _ {};
+                };
+                // Return result
+                return #Ok(interest_amount)
+
+            };
+            case null {return #Err(#DepositError);}
+        };
     };
 
     public shared(msg) func deposit(loanId: Nat, depositAmount: Nat): async T.DepositReceipt {
@@ -220,6 +343,18 @@ shared(init_msg) actor class farmLoan() = this {
     // After user transfers ICP to the target subaccount
     private func depositIcp(caller: Principal, loanId: Nat, depositAmount: Nat): async T.DepositReceipt {
 
+        if(loanId != 0){
+            switch (loans.get(loanId)) {
+                case (?loan){
+                    if(loan.status != #initiated) {
+                        return #Err(#DepositError);
+                    };
+                    let total_committed : Nat = book.totalCommitted(loanId);
+                    if(total_committed + depositAmount > loan.juniorAmount){return #Err(#DepositError);};
+                };
+                case null {return #Err(#DepositError);}
+            };
+        };
         // Calculate target subaccount
         // NOTE: Should this be hashed first instead?
         let source_account = Account.accountIdentifier(Principal.fromActor(this), Account.principalToSubaccount(caller));
@@ -231,7 +366,7 @@ shared(init_msg) actor class farmLoan() = this {
         Debug.print("Source Account : "# Principal.toText(caller) #" ... Balance : " # Nat64.toText(balance.e8s));
 
         // Transfer to default subaccount
-        let icp_receipt = if (Nat64.toNat(balance.e8s) > (depositAmount + icp_fee)) {
+        let icp_receipt = if (Nat64.toNat(balance.e8s) > (depositAmount + icp_fee )) {
             await Ledger.transfer({
                 memo: Nat64    = 0;
                 from_subaccount = ?Account.principalToSubaccount(caller);
@@ -252,7 +387,41 @@ shared(init_msg) actor class farmLoan() = this {
         };
 
         // keep track of deposited ICP
-        book.addLoan(caller,loanId,depositAmount);
+        if(loanId == 0){
+            //Senior loan, add to pool
+            pool.depositFunds(caller,depositAmount);
+        }
+        else{
+            //Junior loan, add to loan
+            book.addLoan(caller,loanId,depositAmount);
+
+            switch (loans.get(loanId)) {
+                case (?loan){
+                    let total_committed : Nat = book.totalCommitted(loanId);
+                    if(total_committed == loan.juniorAmount){
+                        let id = loan.id;
+                        let owner = loan.owner;
+                        let juniorAmount = loan.juniorAmount;
+                        let seniorAmount = loan.seniorAmount;
+                        let status = #approved;
+                        let interest = loan.interest;
+                        let startTime = Time.now();
+
+                        let updated_loan : T.Loan = {
+                            id;
+                            status;
+                            owner;
+                            juniorAmount;
+                            seniorAmount;
+                            interest;
+                            startTime;
+                        };
+                        loans.put(loanId, updated_loan);                        
+                    };
+                };
+                case null {}
+            } ;
+        };
 
         // Return result
         #Ok(depositAmount)

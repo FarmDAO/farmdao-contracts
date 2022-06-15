@@ -44,6 +44,17 @@ module {
             };
         };
 
+        public func totalCommitted(loanID: Nat) : Nat{
+            var total = 0;
+            for ((x, y) in book.entries()) {
+                for ((key: Nat, value: Nat) in y.entries()) {
+                    //Debug.print( debug_show("Balance: Loan: ", key, " amount: ",value));
+                    if(key == loanID){total += value;};
+                };
+            };
+            total
+        };
+
         public func clear() {
             book := M.HashMap<Principal, M.HashMap<Nat, Nat>>(10, Principal.equal, Principal.hash);
         };

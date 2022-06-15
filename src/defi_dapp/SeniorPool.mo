@@ -13,6 +13,10 @@ module {
 
         var share = M.HashMap<Principal, Nat>(10, Principal.equal, Principal.hash);
 
+        public func clear() {
+            share := M.HashMap<Principal, Nat>(10, Principal.equal, Principal.hash);
+        };
+
         public func get(user: Principal) : ?Nat {
             share.get(user)
         };

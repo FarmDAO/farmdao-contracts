@@ -21,6 +21,8 @@ module {
         owner: Principal;
         juniorAmount: Nat;
         seniorAmount: Nat;
+        interest: Nat;
+        startTime: Time.Time;
     };
     
     // ledger types
@@ -111,6 +113,7 @@ module {
     public type DepositErr = {
         #BalanceLow;
         #TransferFailure;
+        #DepositError;
     };
     public type DepositReceipt = {
         #Ok: Nat;
