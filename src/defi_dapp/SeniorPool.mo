@@ -17,6 +17,18 @@ module {
             share := M.HashMap<Principal, Nat>(10, Principal.equal, Principal.hash);
         };
 
+        public func totalCommitted() : Nat{
+            var total = 0;
+            for ((x, y) in share.entries()) {
+                total += y;
+            };
+            total
+        };
+
+        public func entries() : Iter.Iter<(Principal, Nat)> {
+            share.entries()
+        };
+
         public func get(user: Principal) : ?Nat {
             share.get(user)
         };

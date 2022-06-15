@@ -204,6 +204,18 @@ shared(init_msg) actor class farmLoan() = this {
     };
 
     // ===== Loans STATE FUNCTIONS =====
+    
+    public shared query (msg) func getPoolBalance() : async Nat {
+        switch (pool.get(msg.caller)) {
+            case (?pool_balance) {
+                return pool_balance;
+            };
+            case (null) {
+                return 0;
+            };
+        };
+    };
+
     public shared query (msg) func getBalance(loanId: Nat) : async Nat {
         switch (book.get(msg.caller)) {
             case (?loan_balance) {
@@ -222,21 +234,19 @@ shared(init_msg) actor class farmLoan() = this {
         };
     };
 
-    public shared query (msg) func getBalances() : async [T.Balance] {
-        switch (book.get(msg.caller)) {
-            case (?loan_balance) {
-                Array.map<(Nat, Nat),T.Balance>(Iter.toArray(loan_balance.entries()), func (k : Nat, v: Nat) : T.Balance {
-                    {
-                        owner = msg.caller;
-                        loanId = k;
-                        amount = v;
-                    }
-                })
-            };
-            case (null) {
-                return [];
-            };
+    public shared query (msg) func getAllPoolBalances() : async [T.Balance] {
+        
+        // could probably allocate more but this is minimum
+        let buff : Buffer.Buffer<T.Balance> = Buffer.Buffer(pool.size());
+        let loanId = 0;
+        for ((owner, amount) in pool.entries()) {
+            buff.add({
+                owner;
+                loanId;
+                amount;
+            });
         };
+        buff.toArray()
     };
 
 
@@ -274,9 +284,11 @@ shared(init_msg) actor class farmLoan() = this {
     };
 
     public func getLoanInterestAmount(loanId: Nat): async Nat {
+        Debug.print("getLoanInterestAmount");
         switch (loans.get(loanId)) {
             case (?loan){
-                let interest_amount =  getInterestAmount(loan);
+                let time = Time.now();
+                let interest_amount =  getInterestAmount(loan, time);
                 return interest_amount;
             };
             
@@ -284,10 +296,15 @@ shared(init_msg) actor class farmLoan() = this {
         };
         
     };
-    private func getInterestAmount(loan: T.Loan): Nat {
+    private func getInterestAmount(loan: T.Loan, time: Time.Time): Nat {
         let interest_per_year = (loan.juniorAmount + loan.seniorAmount) * loan.interest;
-        let interest_per_nano = interest_per_year / 31557000000000000;
-        let interest_amount = Int.abs(Time.now() - loan.startTime) * interest_per_nano;
+        Debug.print("Interest per year: " # Nat.toText(interest_per_year));
+        let interest_per_second = interest_per_year / 31536000;
+        Debug.print("interest_per_second: " # Nat.toText(interest_per_second));
+        let time_passed_second = Int.abs(time - loan.startTime)/1000000000;
+        Debug.print("time_passed_second: " # Nat.toText(time_passed_second));
+        let interest_amount = (time_passed_second * interest_per_second)/100;
+        Debug.print("interest_amount: " # Nat.toText(interest_amount));
         return interest_amount;
     };
     public shared(msg) func payInterest(loanId: Nat): async T.DepositReceipt {
@@ -299,7 +316,8 @@ shared(init_msg) actor class farmLoan() = this {
                 };
 
                 let caller = msg.caller;
-                let interest_amount = getInterestAmount(loan);
+                let time = Time.now();
+                let interest_amount = getInterestAmount(loan, time);
                 
                 let source_account = Account.accountIdentifier(Principal.fromActor(this), Account.principalToSubaccount(caller));
                 
@@ -327,6 +345,36 @@ shared(init_msg) actor class farmLoan() = this {
                     };
                     case _ {};
                 };
+                let id = loan.id;
+                let owner = loan.owner;
+                let juniorAmount = loan.juniorAmount;
+                let seniorAmount = loan.seniorAmount;
+                let status = loan.status;
+                let interest = loan.interest;
+                let startTime = time;
+
+                let updated_loan : T.Loan = {
+                    id;
+                    status;
+                    owner;
+                    juniorAmount;
+                    seniorAmount;
+                    interest;
+                    startTime;
+                };
+                loans.put(loanId, updated_loan);
+
+                //Distribute interest on pool shareholders
+                let total_committed : Nat = pool.totalCommitted();
+                Debug.print("total_committed: " # Nat.toText(total_committed));
+                let interest_per_share : Float = Float.fromInt (interest_amount)/Float.fromInt (total_committed);
+                Debug.print("interest_per_share: " # Float.toText(interest_per_share));
+                for ((x, y) in pool.entries()) {
+                    let lender_share = interest_per_share * Float.fromInt (y);
+                    Debug.print("lender: " # Principal.toText(x) # "lender_share: " # Float.toText(lender_share));
+                    pool.depositFunds(x,Int.abs(Float.toInt(lender_share)));
+                };
+
                 // Return result
                 return #Ok(interest_amount)
 
