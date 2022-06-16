@@ -171,3 +171,32 @@ cd motoko/defi
 make install
 ```
 
+### FarmDAO 
+
+Add loan to contract. Takes Junior debt, senior debt and percentage
+  addLoan: (nat, nat, nat) -> (AddLoanReceipt);
+Deposit funds to a loan. Takes loan id and amount to commit. If loan is 0, then it commits to senior pool
+  deposit: (nat, nat) -> (DepositReceipt);
+Get all balances for all creditors in all loans
+  getAllBalances: () -> (vec Balance) query;
+Get balance for caller for a loan. Takes loan id
+  getBalance: (nat) -> (nat) query;
+Get balance for caller for senior pool.
+  getPoolBalance: () -> (nat) query;
+Get all balances for all creditors in senior pool
+  getAllPoolBalances: () -> (vec Balance) query;
+Get deposit address for caller
+  getDepositAddress: () -> (blob);
+Get details for loan
+  getLoan: (nat) -> (opt Loan);
+Get accumlated interest on a loan
+  getLoanInterestAmount: (nat) -> (nat);
+Get all loans
+  getLoans: () -> (vec Loan);
+Pays interest from caller wallet for loan
+  payInterest: (nat) -> (DepositReceipt);
+Withdraw caller deposited amount from pool. Takes amount to withdraw and withdraw address
+  withdraw: (nat, principal) -> (WithdrawReceipt);
+Withdraw funds for an accepted loan. Takes loan id and withdraw address
+  withdrawFund: (nat, principal) -> (WithdrawReceipt);
+
