@@ -1,0 +1,87 @@
+type farmLoan = 
+ service {
+   addLoan: (nat, nat, nat) -> (AddLoanReceipt);
+   cancelLoan: (nat) -> (CancelLoanReceipt);
+   clear: () -> () oneway;
+   deposit: (nat, nat) -> (DepositReceipt);
+   getAllBalances: () -> (vec Balance) query;
+   getAllPoolBalances: () -> (vec Balance) query;
+   getBalance: (nat) -> (nat) query;
+   getCanisterICPAddress: () -> (blob);
+   getDepositAddress: () -> (blob);
+   getLoan: (nat) -> (opt Loan);
+   getLoanInterestAmount: (nat) -> (nat);
+   getLoans: () -> (vec Loan);
+   getPoolBalance: () -> (nat) query;
+   payInterest: (nat) -> (DepositReceipt);
+   whoami: () -> (principal) query;
+   withdraw: (nat, principal) -> (WithdrawReceipt);
+   withdrawFund: (nat, principal) -> (WithdrawReceipt);
+ };
+type WithdrawReceipt = 
+ variant {
+   Err: WithdrawErr;
+   Ok: nat;
+ };
+type WithdrawErr = 
+ variant {
+   BalanceLow;
+   TransferFailure;
+ };
+type Time = int;
+type LoanStatus = 
+ variant {
+   approved;
+   defaulted;
+   initiated;
+   raised;
+   repayed;
+ };
+type Loan = 
+ record {
+   id: nat;
+   interest: nat;
+   juniorAmount: nat;
+   owner: principal;
+   seniorAmount: nat;
+   startTime: Time;
+   status: LoanStatus;
+ };
+type DepositReceipt = 
+ variant {
+   Err: DepositErr;
+   Ok: nat;
+ };
+type DepositErr = 
+ variant {
+   BalanceLow;
+   DepositError;
+   TransferFailure;
+ };
+type CancelLoanReceipt = 
+ variant {
+   Err: CancelLoanErr;
+   Ok: nat;
+ };
+type CancelLoanErr = 
+ variant {
+   NotAllowed;
+   NotExistingLoan;
+ };
+type Balance = 
+ record {
+   amount: nat;
+   loanId: nat;
+   owner: principal;
+ };
+type AddLoanReceipt = 
+ variant {
+   Err: AddLoanErr;
+   Ok: opt Loan;
+ };
+type AddLoanErr = 
+ variant {
+   InvalidLoan;
+   LoansBookFull;
+ };
+service : () -> farmLoan

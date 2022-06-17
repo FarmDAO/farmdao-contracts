@@ -13,10 +13,7 @@
     "prebuild": "npm run copy:types",
     "start": "webpack serve --mode development --env development",
     "prestart": "npm run copy:types",
-    "copy:types": "rsync -avr .dfx/$(echo ${DFX_NETWORK:-'**'})/canisters/** --exclude='assets/' --exclude='idl/' --exclude='*.wasm' --exclude='*.most' --delete src/declarations",
-    "generate:types": "npm run generate:idl; npm run generate:ts",
-    "generate:idl": "didc bind ./src/defi_dapp.did -t js > src/declarations/defi_dapp/defi_dapp.did.js",
-    "generate:ts": "didc bind ./src/defi_dapp.did -t ts > src/declarations/defi_dapp/defi_dapp.did.d.ts"
+    "copy:types": "rsync -avr .dfx/$(echo ${DFX_NETWORK:-'**'})/canisters/** --exclude='assets/' --exclude='idl/' --exclude='*.wasm' --exclude='*.most' "
   },
   "devDependencies": {
     "@babel/core": "^7.17.10",

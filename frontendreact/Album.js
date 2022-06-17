@@ -15,7 +15,7 @@ import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
 import Link from '@mui/material/Link';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { farmdoa } from '../src/declarations/defi_dapp/index';
+import { farmdoa } from '../frontendreact/defi_dapp';
 
 function Copyright() {
   return (
