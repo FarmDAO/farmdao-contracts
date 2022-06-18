@@ -22,6 +22,7 @@
   let depositAddressBlob;
   let iiPrincipal = "";
   let authType = "anonymous";
+  let ledgerBalance = 0;
 
   let backendActor;
   let ledgerActor;
@@ -91,8 +92,6 @@
         process.env.LEDGER_CANISTER_ID
       );
 
-      let ledgerBalance = 0;
-
       // // Fetch initial balances
       // const goldenBalance = await goldenActor.balanceOf($auth.principal);
       // const akitaBalance = await akitaActor.balanceOf($auth.principal);
@@ -105,9 +104,30 @@
       if (approved.e8s) {
         ledgerBalance = approved.e8s;
       }
+
+      console.log("Approved: ", approved);
     }
 
     console.log("You are (deposit): ", toHexString(depositAddressBlob));
+    // console.log(
+    //   "ledgerActor Transfer: ",
+    //   await ledgerActor.transfer({
+    //     to: depositAddressBlob,
+    //     fee: { e8s: 10000n },
+    //     from_subaccount: [],
+    //     created_at_time: [],
+    //     memo: 20000n,
+    //     amount: { e8s: 200000n },
+    //   })
+    // );
+    // console.log(depositAddressBlob);
+    // const approved = await ledgerActor.account_balance({
+    //   account: depositAddressBlob,
+    // });
+
+    // console.log("Balance after transfer: ", approved.e8s);
+    // console.log(ledgerBalance);
+    // console.log(integer(1000 + "n"));
   });
 
   async function createLoanRequest(amount) {
@@ -126,36 +146,103 @@
 
   async function getLoans() {
     const loans = await backendActor.getLoans();
-    userBalances.set([...loans]);
     console.log(loans);
+  }
+
+  async function getLoanStatus(id) {
+    const loan = await backendActor.getLoan(BigInt(id));
+    const status = Object.keys(loan[0].status)[0];
+
+    console.log(`Loan ${id} status: `, status);
+    return status;
   }
 
   async function depositIntoPool(loan_id, amount) {
     if (amount % 1 != 0) {
       console.log("Please use round figures");
     } else {
-      await backendActor.deposit(loan_id, amount);
-      console.log("Deposited");
+      console.log("Transfering tokens to depositBlob");
+      const transfer = await ledgerActor.transfer({
+        to: depositAddressBlob,
+        fee: { e8s: BigInt(10000) },
+        memo: BigInt(loan_id),
+        from_subaccount: [],
+        created_at_time: [],
+        amount: { e8s: BigInt(amount) },
+      });
+      console.log("transfer done: ", transfer);
+      console.log("----------------------------------------------");
+      console.log("Making deposit");
+      const makeDeposit = await backendActor.deposit(
+        BigInt(loan_id),
+        BigInt(amount)
+      );
+      console.log("Deposited: ", makeDeposit);
     }
   }
   async function getPoolBalance(id) {
-    const balance = await backendActor.getPoolBalance(id);
+    const poolBalance = await backendActor.getBalance(BigInt(id));
 
-    console.log(balance);
-    // console.log(`Pool ${id} balance = ${balance}`);
+    console.log(`Pool ${id} balance = `, poolBalance);
+  }
+
+  async function getPoolDetails(id) {
+    const poolDetails = await backendActor.getLoan(BigInt(id));
+
+    console.log(`Loan ${id} details: `, poolDetails[0]);
+  }
+
+  async function withdrawFromPool(loan_id) {
+    const principal = iiPrincipal;
+
+    const makeWithdrawal = await backendActor.withdraw(
+      BigInt(loan_id),
+      principal
+    );
+    console.log(
+      `Withdrawing your contribution from pool ${loan_id}`,
+      makeWithdrawal
+    );
+  }
+
+  async function withdrawFunds(loan_id) {
+    const principal = iiPrincipal;
+
+    if ((await getLoanStatus(loan_id)) == "approved") {
+      const makeWithdrawRequest = await backendActor.withdrawFund(
+        BigInt(loan_id),
+        principal
+      );
+
+      console.log("Withdrawal: ", makeWithdrawRequest);
+    } else {
+      console.log(
+        `Loan pool ${loan_id} hasn't been approved, wait until it has been approved.`
+      );
+    }
   }
 </script>
 
 <div>
-  <p>Hello from Loans</p>
+  <h1>Hello from Loans</h1>
+  <br />
+  <p>Create Loan Pool/Show Existing Loans</p>
   <input class="input-style" bind:value={newLoan.amount} type="number" />
   <button
     class="btn-accept"
     on:click={createLoanRequest(newLoan.amount)}
-    title="Create Loan Request">Create A Loan!</button
+    title="Create Loan Request">Create!</button
   >
   <button class="btn-accept" on:click={getLoans} title="Create Loan Request"
-    >Show Loans!</button
+    >Show Loans Pools!</button
+  >
+
+  <p>Get Loan Pool status</p>
+  <input class="input-style" bind:value={loan_id} type="number" />
+  <button
+    class="btn-accept"
+    on:click={getLoanStatus(loan_id)}
+    title="Get Loan Pool Status">Status</button
   >
 
   <p>Deposit into a pool</p>
@@ -164,14 +251,36 @@
   <button
     class="btn-accept"
     on:click={depositIntoPool(newDeposit.loan_id, newDeposit.amount)}
-    title="Deposit into a pool">Deposit into a Pool</button
+    title="Deposit into Loan Pool">Deposit</button
   >
 
-  <p>Get Pool Balance</p>
+  <p>Get Pool Balance/Details</p>
   <input class="input-style" bind:value={loan_id} type="number" />
   <button
     class="btn-accept"
     on:click={getPoolBalance(loan_id)}
-    title="Get pool balance">Get pool balance</button
+    title="Get Loan Pool Balance">Pool Balance</button
   >
+  <button
+    class="btn-accept"
+    on:click={getPoolDetails(loan_id)}
+    title="Get Loan Pool Details">Pool Details</button
+  >
+
+  <p>Back out from pool (withdraw deposited amount).</p>
+  <input class="input-style" bind:value={loan_id} type="number" />
+  <button
+    class="btn-accept"
+    on:click={withdrawFromPool(loan_id)}
+    title="Withdraw from pool">Withdraw</button
+  >
+
+  <p>Withdraw Funds From Pool</p>
+  <input class="input-style" bind:value={loan_id} type="number" />
+  <button
+    class="btn-accept"
+    on:click={withdrawFunds(loan_id)}
+    title="Get Loan Pool Balance">Withdraw funds</button
+  >
+  <br />
 </div>
