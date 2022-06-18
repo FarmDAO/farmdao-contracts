@@ -115,19 +115,7 @@
 
       // Create a balances array and set the userBalance store object
       const balances = [];
-      console.log("Fetching all user balances");
       const allUserBalances = await backendActor;
-      console.log("User Balances: ", allUserBalances);
-
-      // const createLoan = await backendActor.addLoan(3000000, 70000000, 20);
-      // console.log("Add Loan: ", createLoan);
-
-      const allLoans = await backendActor.getLoans();
-      console.log("All Loans: ", allLoans);
-
-      const getLoan = await backendActor.getLoan(1);
-      console.log("Loan 1: ", getLoan);
-      console.log("Loan status: ", Object.keys(getLoan[0].status));
 
       for (let i = 0; i < $canisters.length; i++) {
         const principal = Principal.fromText($canisters[i].canisterId);
@@ -152,7 +140,6 @@
 
       // Update the store values
       userBalances.set([...balances]);
-      console.log("User Balances: ", $userBalances);
     } else if ($plugWallet.isConnected) {
       // TODO: Support Plug wallet
       // console.log("Using Plug for DEX actor");

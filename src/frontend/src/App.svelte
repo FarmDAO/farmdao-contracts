@@ -37,13 +37,6 @@
       <BalanceInfo />
     {/if}
   </div>
-  <div class="footer">
-    <a class="ic-badge-link" href="https://www.smartcontracts.org">
-      <picture>
-        <img src="images/ic-badge.png" alt="Powered by the Internet Computer" />
-      </picture>
-    </a>
-  </div>
 </main>
 
 <style>

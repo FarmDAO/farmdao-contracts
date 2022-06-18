@@ -60,20 +60,20 @@
     const principal = Principal.fromText($canisters[2].canisterId);
     const balance = await backendActor.getBalance(principal);
     console.log(balance);
-    const result = await backendActor.placeOrder(
-      Principal.fromText(newOrder.fromCanister),
-      newOrder.fromAmount,
-      Principal.fromText(newOrder.toCanister),
-      newOrder.toAmount
-    );
+    // const result = await backendActor.placeOrder(
+    //   Principal.fromText(newOrder.fromCanister),
+    //   newOrder.fromAmount,
+    //   Principal.fromText(newOrder.toCanister),
+    //   newOrder.toAmount
+    // );
 
-    console.log(result);
-    if (result.Ok) {
-      const orderList = await backendActor.getOrders();
-      orders.set([]);
-      orders.set(orderList.reverse());
-    }
-    closeOrderForm();
+    // console.log(result);
+    // if (result.Ok) {
+    //   const orderList = await backendActor.getOrders();
+    //   orders.set([]);
+    //   orders.set(orderList.reverse());
+    // }
+    // closeOrderForm();
   }
 
   async function buyOrder(order) {
