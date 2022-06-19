@@ -147,13 +147,12 @@
   });
 
   async function createLoanRequest(amount) {
-    if (amount <= 10000000)
-      console.log("Amount must be greater than: 10,000,000 icp");
-    loanCreation.set("Amount must be greater than: 10,000,000 icp");
     const svnty_ratio = (amount * 70) / 100;
     const thrty_ratio = amount - svnty_ratio;
-
-    if (svnty_ratio % 1 != 0) {
+    if (amount <= 10000000) {
+      console.log("Amount must be greater than: 10,000,000 icp");
+      loanCreation.set("Amount must be greater than: 10,000,000 icp");
+    } else if (svnty_ratio % 1 != 0) {
       console.log("Please use round figures");
       loanCreation.set("Please use round figures");
     } else {
