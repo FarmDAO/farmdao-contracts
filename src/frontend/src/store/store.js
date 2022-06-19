@@ -23,7 +23,27 @@ export const canisterActors = writable([]);
 
 export const userBalances = writable([]);
 
+export const loanCreation = writable("");
+
 export const loans = writable([]);
+
+export const loanDetils = writable([]);
+
+export const loanStatus = writable("");
+
+export const juniorDeposit = writable("");
+
+export const seniorDeposit = writable("");
+
+export const juniorPoolBalance = writable("");
+
+export const seniorPoolBalance = writable("");
+
+export const seniorWithdrawal = writable("");
+
+export const loanWithdrawal = writable("");
+
+export const loanRepay = writable("");
 
 export const createCanisterActor = (agent, idl, canisterId) => {
   return Actor.createActor(idl, {

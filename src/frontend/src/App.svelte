@@ -30,11 +30,10 @@
 
 <main>
   <Nav />
-  <h1>DeFi DEX</h1>
   <div class="main-container">
     {#if $auth.loggedIn || $plugWallet.isConnected}
-      <Loans />
       <BalanceInfo />
+      <Loans />
     {/if}
   </div>
 </main>
